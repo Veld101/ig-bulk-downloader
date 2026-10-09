@@ -14181,7 +14181,6 @@ var _global =
         static downloadContent() {
           return t(this, void 0, void 0, function* () {
             console.log("[IGDL] bulk: click handler start", location.href);
-            yield s.createAndAdd("[IGDL] Bulk download started. Scanning the profile...", "default", !0, 4e3);
 
             // 1) account name from the profile page DOM
             const nameEl = document.querySelector(y.accountName);
