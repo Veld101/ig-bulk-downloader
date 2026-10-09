@@ -14226,6 +14226,7 @@ var _global =
             const progress = new Ne();
             const dirUser = yield a.getDirectoryHandle(account.username, { create: !0 });
             console.log("[IGDL] dir ready");
+            yield progress.updateProgress({ completed: 0, total: 0, isFirst: !0, isLast: !1, account, type: "download" });
 
             let newFiles = 0, existing = 0, processed = 0, videosSkipped = 0;
             const isVideoItem = (it) => /\.mp4(\?|$)/i.test(it.url || "");
@@ -14278,7 +14279,7 @@ var _global =
                 processed += 1;
                 progress.updateProgress({
                   completed: processed, total: Math.max(items.length, processed),
-                  isFirst: processed === 1, isLast: !1, account, type: "download",
+                  isFirst: !1, isLast: !1, account, type: "download",
                 });
               }
               page += 1;
@@ -14345,7 +14346,7 @@ var _global =
                   }
                   progress.updateProgress({
                     completed: processed, total: Math.max(ids.size, processed),
-                    isFirst: processed === 1, isLast: !1, account, type: "download",
+                    isFirst: !1, isLast: !1, account, type: "download",
                   });
                 }
                 scrollGrid();
