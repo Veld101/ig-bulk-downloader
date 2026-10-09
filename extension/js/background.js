@@ -5363,7 +5363,7 @@ var _global =
                   }));
               })();
         })({
-          dsn: "https://595fcb31bf231ed9f965fc44e539f327@o4506001441226752.ingest.sentry.io/4506001442930688",
+          dsn: "",
           release: kn.runtime.getManifest().version,
           integrations: [],
           tracesSampleRate: 0.01,

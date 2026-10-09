@@ -40,15 +40,17 @@ Single-post downloads still work because they have a DOM/Relay fallback
 
 The bulk path is rewritten:
 
-1. **Page on demand**: download the current batch first, then scroll one step to
-   load more. Post shortcodes are collected from the grid — note modern
-   Instagram uses username-prefixed hrefs (`/<user>/p/<shortcode>/`).
-2. **Resolve via Instagram's per-media API** (`/api/v1/media/<id>/info/`,
-   verified working), falling back to the Relay resolver. **Videos are skipped —
-   images only.**
-3. Save into the chosen folder (`<dir>/<username>/`) with the original naming.
+1. **Background cursor pagination** via the feed API
+   (`/api/v1/feed/user/<username>/username/?count=12&max_id=<cursor>`), so the
+   page does **not** scroll. Each page is downloaded as soon as it arrives.
+2. **Fallback**: if the feed API returns nothing, enumerate the grid by scrolling
+   (supporting modern username-prefixed hrefs `/<user>/p/<shortcode>/`) and
+   resolve each post via the per-media API (`/api/v1/media/<id>/info/`).
+3. Save into the chosen folder (`<dir>/<username>/`). **Images only — videos are
+   skipped.**
 
-Only one method — `downloadContent()` — is changed.
+Only one method — `downloadContent()` — is changed. The patcher additionally
+disables telemetry (see below).
 
 ## Layout
 
@@ -96,20 +98,19 @@ node --check extension/js/extension.js
 
 ## Known limitations
 
-- Bulk resolution uses Instagram's per-media API with a Relay fallback, so it may
-  need adjustment when Instagram changes their endpoints.
+- Bulk uses the feed API for cursor pagination (with a grid-scrolling fallback),
+  so it may need adjustment when Instagram changes their endpoints.
 - Downloads are sequential; large profiles are slow. Throttling is in place
-  (~350 ms between posts, ~1.2 s per scroll step). Avoid heavy runs on huge
-  accounts to prevent temporary rate limiting.
+  (~1 s per feed page). Avoid heavy runs on huge accounts to prevent temporary
+  rate limiting.
 - Only images are downloaded; videos are skipped by design.
 - A logged-in session is required.
 
 ## Privacy note
 
-The upstream 4.12.16 bundle ships **Sentry telemetry** (reports to
-`ingest.sentry.io`, with 1% session-replay sampling). If you want a truly
-offline, no-outbound build, that telemetry can be removed/disabled with an extra
-patch — ask if you want it.
+This build **disables the upstream Sentry telemetry**: the SDK's DSN is emptied
+(`dsn:""`), so no events are ever sent to `ingest.sentry.io`. The extension then
+only talks to Instagram. `node patch/apply.mjs` re-enforces this on every run.
 
 ## License & credits
 
