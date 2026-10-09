@@ -18,14 +18,12 @@
    } ],
    "description": "Download photos, videos and Reels from Instagram.",
    "host_permissions": [ "*://*.instagram.com/*", "*://*.cdninstagram.com/*", "*://*.cdninstagram.net/*", "*://*.fbcdn.net/*" ],
-   "icons": {
-      "512": "icons/igdl2.png"
-   },
+   "icons": { "128": "icons/igdl2-128.png", "512": "icons/igdl2.png" },
    "manifest_version": 3,
    "name": "IG Bulk Downloader",
    "options_page": "options.html",
    "permissions": [ "storage" ],
-   "version": "4.12.16",
+   "version": "4.12.17",
    "web_accessible_resources": [ {
       "matches": [ "*://*/*" ],
       "resources": [ "icons/download_all_black.svg", "icons/download_all_white.svg", "icons/download_black.svg", "icons/download_white.svg", "icons/close_black_24dp.svg", "icons/igdl2.png" ]
