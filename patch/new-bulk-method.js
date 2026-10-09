@@ -33,6 +33,15 @@
             console.log("[IGDL] directory:", a && a.name);
 
             const account = { username: e, profilePicUrl: "", totalPosts: 0 };
+            try {
+              const cands = document.querySelectorAll(y.accountImage + ", header img");
+              for (const el of cands) {
+                const img = el.tagName === "IMG" ? el : (el.querySelector && el.querySelector("img"));
+                const src = img && (img.currentSrc || img.src);
+                if (src && 0 !== src.indexOf("data:")) { account.profilePicUrl = src; break; }
+              }
+            } catch (_) {}
+            console.log("[IGDL] avatar:", account.profilePicUrl ? "ok" : "none");
             const progress = new Ne();
             const dirUser = yield a.getDirectoryHandle(account.username, { create: !0 });
             console.log("[IGDL] dir ready");
