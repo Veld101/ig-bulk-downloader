@@ -14228,12 +14228,13 @@ var _global =
             yield progress.updateProgress({ completed: 0, total: 0, isFirst: !0, isLast: !1, account, type: "download" });
 
             let newFiles = 0, existing = 0, processed = 0, videosSkipped = 0, failed = 0;
+            const failedItems = [];
             const isVideoItem = (it) => /\.mp4(\?|$)/i.test(it.url || "");
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             const withTimeout = (p, ms) =>
               Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
             // retry transient failures (network hiccups, VPN node switches)
-            const MAX_TRIES = 5;
+            const MAX_TRIES = 6;
             const withRetry = async (label, fn, tries = MAX_TRIES) => {
               let last;
               for (let i = 0; i < tries; i++) {
@@ -14241,7 +14242,7 @@ var _global =
                 catch (err) {
                   last = err;
                   console.warn("[IGDL] retry", i + 1, "/", tries, label, err && err.message);
-                  if (i < tries - 1) await sleep(1000 * Math.pow(2, i));
+                  if (i < tries - 1) await sleep(Math.min(1000 * Math.pow(2, i + 1), 30000));
                 }
               }
               throw last;
@@ -14253,15 +14254,16 @@ var _global =
               try {
                 const fh = await dirUser.getFileHandle(name, { create: !0 });
                 const f = await fh.getFile();
-                if (f.size > 0) { existing += 1; return; }
+                if (f.size > 0) { existing += 1; return !0; }
                 const blob = await withRetry("fetch " + name, () => Pe(it.url));
                 const w = await fh.createWritable();
                 await w.write(blob);
                 await w.close();
                 newFiles += 1;
+                return !0;
               } catch (err) {
-                failed += 1;
                 console.error("[IGDL] bulk save gave up", name, err);
+                return !1;
               }
             };
 
@@ -14289,8 +14291,9 @@ var _global =
               for (let k = before; k < items.length; k++) {
                 const it = items[k];
                 if (isVideoItem(it)) { videosSkipped += 1; continue; }
-                yield downloadItem(it);
+                const ok = yield downloadItem(it);
                 processed += 1;
+                if (!ok) failedItems.push(it);
                 progress.updateProgress({
                   completed: processed, total: Math.max(items.length, processed),
                   isFirst: !1, isLast: !1, account, type: "download",
@@ -14351,8 +14354,9 @@ var _global =
                     if (media) {
                       for (const it of media) {
                         if (isVideoItem(it)) { videosSkipped += 1; continue; }
-                        yield downloadItem(it);
+                        const ok = yield downloadItem(it);
                         processed += 1;
+                        if (!ok) failedItems.push(it);
                       }
                     }
                   } catch (err) {
@@ -14372,6 +14376,23 @@ var _global =
               try { window.scrollTo(0, 0); } catch (_) {}
               items.length = 0;
             }
+
+            // 5) drain: retry every file that failed, several rounds with a longer wait between rounds
+            if (failedItems.length) {
+              console.log("[IGDL] draining", failedItems.length, "failed downloads...");
+              for (let round = 0; round < 4 && failedItems.length; round++) {
+                const again = failedItems.splice(0, failedItems.length);
+                for (const it of again) {
+                  const ok = yield downloadItem(it);
+                  if (!ok) failedItems.push(it);
+                }
+                if (failedItems.length) {
+                  console.log("[IGDL] drain round", round + 1, "left", failedItems.length, "- waiting 15s");
+                  yield sleep(15000);
+                }
+              }
+            }
+            failed = failedItems.length;
 
             console.log("[IGDL] bulk done. total=", items.length, "new=", newFiles, "existing=", existing, "videosSkipped=", videosSkipped, "failed=", failed);
             progress.updateProgress({

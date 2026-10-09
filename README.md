@@ -49,7 +49,9 @@ The bulk path is rewritten:
 3. Save into the chosen folder (`<dir>/<username>/`). **Images only — videos are
    skipped.**
 4. Transient failures (network hiccups, switching VPN nodes) are retried with
-   exponential backoff — both per-file downloads and per-page requests.
+   exponential backoff (up to 6 tries, ~60s per item); files still failing are
+   retried again after the run (four drain rounds, 15s apart). Already-downloaded
+   files are skipped, so re-running also resumes where it left off.
 
 Only one method — `downloadContent()` — is changed. The patcher additionally
 disables telemetry (see below) and stops the injected script from reading
