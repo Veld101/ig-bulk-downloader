@@ -110,7 +110,7 @@ var _global =
                 try {
                   sessionStorage.setItem(
                     "__ig_www_claim",
-                    window.require("PolarisWWWClaim").getWWWClaim(),
+                    (sessionStorage.getItem("www-claim-v2") || ""),
                   );
                 } catch (t) {
                   setTimeout(e, 100);
@@ -271,7 +271,7 @@ var _global =
                 try {
                   sessionStorage.setItem(
                     "__ig_app_id",
-                    window.require("PolarisConfig").getIGAppID(),
+                    "936619743392459",
                   );
                 } catch (t) {
                   setTimeout(e, 100);

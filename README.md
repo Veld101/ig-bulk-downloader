@@ -50,7 +50,10 @@ The bulk path is rewritten:
    skipped.**
 
 Only one method — `downloadContent()` — is changed. The patcher additionally
-disables telemetry (see below).
+disables telemetry (see below) and stops the injected script from reading
+Instagram's internal `PolarisWWWClaim` / `PolarisConfig` modules (they fail to
+resolve and spam the console); it mirrors the session token Instagram already
+stores (`www-claim-v2`) instead.
 
 ## Layout
 

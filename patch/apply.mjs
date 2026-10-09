@@ -68,3 +68,19 @@ for (const name of fs.readdirSync(jsDir)) {
   console.log(`Telemetry: disabled Sentry DSN in ${name}.`);
 }
 if (!disabled) console.log("Telemetry: no Sentry DSN found (already disabled).");
+
+// ---------------------------------------------------------------- 3) injected script
+// Stop reading Instagram's internal modules (PolarisWWWClaim / PolarisConfig): they fail to
+// resolve and spam the console via IG's ErrorUtils. Read the session token Instagram already
+// stores (www-claim-v2) and use the default app id instead.
+const injectFile = path.join(jsDir, "inject.js");
+let inj = fs.readFileSync(injectFile, "utf8");
+const injBefore = inj;
+inj = inj.replace('window.require("PolarisWWWClaim").getWWWClaim()', '(sessionStorage.getItem("www-claim-v2") || "")');
+inj = inj.replace('window.require("PolarisConfig").getIGAppID()', '"936619743392459"');
+if (inj !== injBefore) {
+  fs.writeFileSync(injectFile, inj);
+  console.log("Injected script: neutralized PolarisWWWClaim/PolarisConfig requires.");
+} else {
+  console.log("Injected script: nothing to change.");
+}
