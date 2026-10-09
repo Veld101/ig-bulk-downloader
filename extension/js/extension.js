@@ -14227,11 +14227,25 @@ var _global =
             console.log("[IGDL] dir ready");
             yield progress.updateProgress({ completed: 0, total: 0, isFirst: !0, isLast: !1, account, type: "download" });
 
-            let newFiles = 0, existing = 0, processed = 0, videosSkipped = 0;
+            let newFiles = 0, existing = 0, processed = 0, videosSkipped = 0, failed = 0;
             const isVideoItem = (it) => /\.mp4(\?|$)/i.test(it.url || "");
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             const withTimeout = (p, ms) =>
               Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+            // retry transient failures (network hiccups, VPN node switches)
+            const MAX_TRIES = 5;
+            const withRetry = async (label, fn, tries = MAX_TRIES) => {
+              let last;
+              for (let i = 0; i < tries; i++) {
+                try { return await fn(); }
+                catch (err) {
+                  last = err;
+                  console.warn("[IGDL] retry", i + 1, "/", tries, label, err && err.message);
+                  if (i < tries - 1) await sleep(1000 * Math.pow(2, i));
+                }
+              }
+              throw last;
+            };
 
             // download a single resolved media item into <dir>/<username>/ (images only)
             const downloadItem = async (it) => {
@@ -14240,13 +14254,14 @@ var _global =
                 const fh = await dirUser.getFileHandle(name, { create: !0 });
                 const f = await fh.getFile();
                 if (f.size > 0) { existing += 1; return; }
-                const blob = await Pe(it.url);
+                const blob = await withRetry("fetch " + name, () => Pe(it.url));
                 const w = await fh.createWritable();
                 await w.write(blob);
                 await w.close();
                 newFiles += 1;
               } catch (err) {
-                console.error("[IGDL] bulk save failed", name, err);
+                failed += 1;
+                console.error("[IGDL] bulk save gave up", name, err);
               }
             };
 
@@ -14264,7 +14279,7 @@ var _global =
               const before = items.length;
               let res;
               try {
-                res = yield withTimeout(Ze.appendToItems(e, hdrs.appId, hdrs.wwwClaim, maxId, items), 20000);
+                res = yield withRetry("feed page " + page, () => withTimeout(Ze.appendToItems(e, hdrs.appId, hdrs.wwwClaim, maxId, items), 20000));
               } catch (err) {
                 console.warn("[IGDL] feed page failed", page, err);
                 break;
@@ -14358,7 +14373,7 @@ var _global =
               items.length = 0;
             }
 
-            console.log("[IGDL] bulk done. total=", items.length, "new=", newFiles, "existing=", existing, "videosSkipped=", videosSkipped);
+            console.log("[IGDL] bulk done. total=", items.length, "new=", newFiles, "existing=", existing, "videosSkipped=", videosSkipped, "failed=", failed);
             progress.updateProgress({
               completed: processed, total: Math.max(items.length, processed),
               isFirst: !1, isLast: !0, account, type: "download",
@@ -14367,7 +14382,7 @@ var _global =
             const d = { imageURL: [], accountName: e || "unknown", type: m.bulk, source: h.Account };
             try { yield o.runtime.sendMessage(d); } catch (err) { console.warn("[IGDL] runtime send failed (context invalidated?)", err); }
             yield s.createAndAddForDownloadComplete(
-              `Account downloaded into "${a.name}/${account.username}". ${newFiles.toLocaleString()} new images were downloaded, ${existing.toLocaleString()} already existed, ${videosSkipped.toLocaleString()} videos were skipped.`,
+              `Account downloaded into "${a.name}/${account.username}". ${newFiles.toLocaleString()} new images were downloaded, ${existing.toLocaleString()} already existed, ${videosSkipped.toLocaleString()} videos were skipped, ${failed.toLocaleString()} failed.`,
               account,
             );
           });

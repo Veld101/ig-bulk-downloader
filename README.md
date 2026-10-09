@@ -48,6 +48,8 @@ The bulk path is rewritten:
    resolve each post via the per-media API (`/api/v1/media/<id>/info/`).
 3. Save into the chosen folder (`<dir>/<username>/`). **Images only — videos are
    skipped.**
+4. Transient failures (network hiccups, switching VPN nodes) are retried with
+   exponential backoff — both per-file downloads and per-page requests.
 
 Only one method — `downloadContent()` — is changed. The patcher additionally
 disables telemetry (see below) and stops the injected script from reading
