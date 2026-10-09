@@ -38,15 +38,15 @@ Single-post downloads still work because they have a DOM/Relay fallback
 
 ### The fix
 
-The bulk path is rewritten to **not depend on any private token**:
+The bulk path is rewritten:
 
-1. Auto-**scroll** the profile page until the whole grid is loaded, collecting
-   unique post shortcodes from `a[href^="/p/"], a[href^="/reel/"]`.
-2. For each shortcode, call the extension's existing single-post resolver
-   `Ve.loadPostFromShortcode()` (Instagram's own Relay, the same mechanism used
-   by single-post download).
-3. Reuse the original save logic `Oe()` (writes into the chosen folder, progress
-   bar, `username_timestamp_mediaId.ext` naming).
+1. **Page on demand**: download the current batch first, then scroll one step to
+   load more. Post shortcodes are collected from the grid — note modern
+   Instagram uses username-prefixed hrefs (`/<user>/p/<shortcode>/`).
+2. **Resolve via Instagram's per-media API** (`/api/v1/media/<id>/info/`,
+   verified working), falling back to the Relay resolver. **Videos are skipped —
+   images only.**
+3. Save into the chosen folder (`<dir>/<username>/`) with the original naming.
 
 Only one method — `downloadContent()` — is changed.
 
@@ -83,7 +83,8 @@ ig-bulk-downloader/
 - **Single post / carousel / Story**: unchanged.
 - **Whole profile**: open a user's profile → click **Download All** in the header
   → on first run pick a save folder (File System Access API) → the extension
-  auto-scrolls, resolves and downloads into `selected-folder/<username>/`.
+  pages the profile, resolves each post and downloads **images** into
+  `selected-folder/<username>/`. **Videos are skipped.**
 
 ## Re-apply the patch from scratch
 
@@ -95,12 +96,12 @@ node --check extension/js/extension.js
 
 ## Known limitations
 
-- Bulk resolution relies on Instagram's Relay (`loadPostFromShortcode`), the same
-  mechanism as single-post download — it must be adjusted again whenever
-  Instagram changes their frontend.
-- Resolve + download is sequential; large profiles are slow. Throttling is in
-  place (~350 ms between posts, ~1.2 s per scroll step). Avoid heavy runs on huge
+- Bulk resolution uses Instagram's per-media API with a Relay fallback, so it may
+  need adjustment when Instagram changes their endpoints.
+- Downloads are sequential; large profiles are slow. Throttling is in place
+  (~350 ms between posts, ~1.2 s per scroll step). Avoid heavy runs on huge
   accounts to prevent temporary rate limiting.
+- Only images are downloaded; videos are skipped by design.
 - A logged-in session is required.
 
 ## Privacy note
