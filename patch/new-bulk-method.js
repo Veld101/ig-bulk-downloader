@@ -69,7 +69,9 @@
               }
             };
 
-            const hdrs = Xe.getHeaders() || { appId: "936619743392459", wwwClaim: sessionStorage.getItem("www-claim-v2") || "" };
+            let hdrs = Xe.getHeaders();
+            for (let w = 0; w < 30 && !(hdrs && hdrs.wwwClaim); w++) { yield sleep(500); hdrs = Xe.getHeaders(); }
+            if (!hdrs || !hdrs.wwwClaim) hdrs = { appId: "936619743392459", wwwClaim: sessionStorage.getItem("www-claim-v2") || "" };
             console.log("[IGDL] wwwClaim len:", hdrs.wwwClaim ? hdrs.wwwClaim.length : 0);
 
             // 3) PRIMARY: background cursor pagination via the feed API (no scrolling).
@@ -182,7 +184,7 @@
             });
 
             const d = { imageURL: [], accountName: e || "unknown", type: m.bulk, source: h.Account };
-            yield o.runtime.sendMessage(d);
+            try { yield o.runtime.sendMessage(d); } catch (err) { console.warn("[IGDL] runtime send failed (context invalidated?)", err); }
             yield s.createAndAddForDownloadComplete(
               `Account downloaded into "${a.name}/${account.username}". ${newFiles.toLocaleString()} new images were downloaded, ${existing.toLocaleString()} already existed, ${videosSkipped.toLocaleString()} videos were skipped.`,
               account,
