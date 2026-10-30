@@ -14260,7 +14260,9 @@ var _global =
             const withTimeout = (p, ms) =>
               Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
             // retry transient failures (network hiccups, VPN node switches)
-            const MAX_TRIES = 6;
+            // (C) 3 tries keeps a rate-limited image from blocking for ~60s; the drain
+            //     rounds at the end still pick up anything that ran out of attempts.
+            const MAX_TRIES = 3;
             const withRetry = async (label, fn, tries = MAX_TRIES) => {
               let last;
               for (let i = 0; i < tries; i++) {
@@ -14268,10 +14270,27 @@ var _global =
                 catch (err) {
                   last = err;
                   console.warn("[IGDL] retry", i + 1, "/", tries, label, err && err.message);
-                  if (i < tries - 1) await sleep(Math.min(1000 * Math.pow(2, i + 1), 30000));
+                  if (i < tries - 1) await sleep(Math.min(1000 * Math.pow(2, i), 8000));
                 }
               }
               throw last;
+            };
+
+            // (B) Pe() has no timeout, so a stalled socket hangs the whole run with no log
+            // output. Download with an explicit deadline. Downloads stay strictly
+            // sequential (one image at a time) -- only the deadline is new.
+            const IMAGE_TIMEOUT_MS = 30000;
+            const fetchImage = async (url) => {
+              const ctrl = new AbortController();
+              const timer = setTimeout(() => ctrl.abort(), IMAGE_TIMEOUT_MS);
+              try {
+                const res = await fetch(url, { signal: ctrl.signal });
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                const buf = await res.arrayBuffer();
+                return new Blob([buf]);
+              } finally {
+                clearTimeout(timer);
+              }
             };
 
             // (E) A file only counts as "already downloaded" when it looks like a complete
@@ -14300,10 +14319,10 @@ var _global =
                 const fh = await dirUser.getFileHandle(name, { create: !0 });
                 const f = await fh.getFile();
                 if (await looksComplete(f)) { existing += 1; return !0; }
-                const blob = await withRetry("fetch " + name, () => Pe(it.url));
-                // guard: an error response (429/403/require_login) must not be saved as an image.
-                // Pe() rebuilds the Response without headers, so blob.type is always "" here --
-                // sniff the magic bytes instead of trusting the MIME type.
+                // strictly sequential: one image at a time, with a hard deadline so a
+                // stalled socket cannot hang the run silently
+                const blob = await withRetry("fetch " + name, () => fetchImage(it.url));
+                // guard: an error response (429/403/require_login) must not be saved as an image
                 if (!blob || !(await looksComplete(blob))) {
                   console.warn("[IGDL] suspicious payload, not an image", name, blob && blob.size);
                   return !1;
