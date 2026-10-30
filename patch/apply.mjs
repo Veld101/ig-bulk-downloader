@@ -12,19 +12,82 @@ const jsDir = path.join(root, "extension", "js");
 const target = path.join(jsDir, "extension.js");
 const bodyFile = path.join(here, "new-bulk-method.js");
 
+// ---------------------------------------------------------------- 0) postId on media items
+// The bulk method reconciles coverage per *post*, but getAllDownloadableMediaItems() only
+// returns per-*media* records, so a carousel post would count once per child. Tag every
+// record with its owning post id. Idempotent: skipped once postId is present.
+const POSTID_MARK = "postId: String(";
+const carouselBlock = `          for (let r of e.carousel_media)
+            n.push({
+              id: r.id,
+              pk: r.pk,
+              taken_at: r.taken_at,
+              username: t,
+              url: this.getBestMediaUrl(r),
+            });`;
+const carouselPatched = `          for (let r of e.carousel_media)
+            n.push({
+              id: r.id,
+              pk: r.pk,
+              taken_at: r.taken_at,
+              username: t,
+              url: this.getBestMediaUrl(r),
+              postId: String(e.id),
+            });`;
+const singleBlock = `            return [
+              {
+                id: e.id,
+                pk: e.pk,
+                taken_at: e.taken_at,
+                username: e.user.username,
+                url: this.getBestMediaUrl(e),
+              },
+            ];`;
+const singlePatched = `            return [
+              {
+                id: e.id,
+                pk: e.pk,
+                taken_at: e.taken_at,
+                username: e.user.username,
+                url: this.getBestMediaUrl(e),
+                postId: String(e.id),
+              },
+            ];`;
+
+{
+  const raw0 = fs.readFileSync(target, "utf8");
+  if (raw0.includes(POSTID_MARK)) {
+    console.log("Post id tagging: already patched.");
+  } else {
+    if (!raw0.includes(singleBlock) || !raw0.includes(carouselBlock)) {
+      throw new Error("Could not locate getAllDownloadableMediaItems() branches for post-id tagging.");
+    }
+    const next = raw0.replace(singleBlock, singlePatched).replace(carouselBlock, carouselPatched);
+    fs.writeFileSync(target, next);
+    console.log("Post id tagging: patched getAllDownloadableMediaItems().");
+  }
+}
+
 // ---------------------------------------------------------------- 1) bulk method
+// Replayable: locate the bulk body by its opening marker and its closing brace, then swap
+// the whole block. This lets an updated new-bulk-method.js overwrite an older patch instead
+// of being silently skipped.
+// Re-read: step 0 may have just rewritten the file.
 const raw = fs.readFileSync(target, "utf8");
 const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+const newBodyLines = fs.readFileSync(bodyFile, "utf8").replace(/\r?\n$/, "").split(/\r?\n/);
+const newBodyJoined = newBodyLines.join(eol);
 
-if (raw.includes("[IGDL] bulk: click handler start")) {
-  console.log("Bulk method: already patched.");
+if (raw.includes(newBodyJoined)) {
+  console.log("Bulk method: already patched (current version).");
 } else {
   const lines = raw.split(/\r?\n/);
   const start = lines.findIndex(
     (l, i) =>
       l.trim() === "static downloadContent() {" &&
       (lines[i + 1] || "").includes("function* () {") &&
-      lines.slice(i, i + 12).some((x) => x.includes("document.querySelector(y.accountName).innerHTML")),
+      (lines.slice(i, i + 12).some((x) => x.includes("document.querySelector(y.accountName).innerHTML")) ||
+        lines.slice(i, i + 12).some((x) => x.includes("[IGDL] bulk: click handler start"))),
   );
   if (start < 0) throw new Error("Could not locate the bulk downloadContent() method.");
 
@@ -43,8 +106,7 @@ if (raw.includes("[IGDL] bulk: click handler start")) {
     throw new Error("Sanity check failed: expected getAccount() right after the bulk method.");
   }
 
-  const newBody = fs.readFileSync(bodyFile, "utf8").replace(/\r?\n$/, "").split(/\r?\n/);
-  const out = [...lines.slice(0, bodyStart), ...newBody, ...lines.slice(bodyEnd + 1)];
+  const out = [...lines.slice(0, bodyStart), ...newBodyLines, ...lines.slice(bodyEnd + 1)];
 
   const backup = target + ".orig";
   if (!fs.existsSync(backup)) fs.writeFileSync(backup, raw);
